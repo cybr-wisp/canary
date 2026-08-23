@@ -1,7 +1,7 @@
-
 import hashlib
 import hmac
 import json
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -29,32 +29,49 @@ def test_pull_request_webhook():
 
     body = {
         "action": "opened",
+        "repository": {
+            "full_name": "cybr-wisp/canary-testbed",
+        },
+        "installation": {
+            "id": 12345,
+        },
         "pull_request": {
             "number": 42,
-            "title": "Fix authentication fallback",
+            "title": "Test Canary",
             "state": "open",
+            "head": {
+                "sha": "abc123",
+            },
         },
     }
 
     payload = json.dumps(body).encode("utf-8")
 
-    response = client.post(
-        "/webhook",
-        content=payload,
-        headers={
-            "Content-Type": "application/json",
-            "X-GitHub-Event": "pull_request",
-            "X-Hub-Signature-256": sign(payload),
-        },
-    )
+    with patch(
+        "app.main.analyze_pull_request",
+        new=AsyncMock(return_value=[]),
+    ), patch(
+        "app.main.create_canary_check",
+        new=AsyncMock(),
+    ):
+        response = client.post(
+            "/webhook",
+            content=payload,
+            headers={
+                "Content-Type": "application/json",
+                "X-GitHub-Event": "pull_request",
+                "X-Hub-Signature-256": sign(payload),
+            },
+        )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert data["status"] == "accepted"
-    assert data["action"] == "opened"
-    assert data["pull_request"]["number"] == 42
+    assert data["status"] == "analyzed"
+    assert data["repository"] == "cybr-wisp/canary-testbed"
+    assert data["pull_request"] == 42
+    assert data["findings"] == 0
 
 
 def test_webhook_rejects_invalid_signature():
