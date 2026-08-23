@@ -4,6 +4,8 @@ from fastapi import FastAPI, HTTPException, Request
 
 from app.config import settings
 from app.github.auth import verify_webhook_signature
+from app.github.checks import create_canary_check
+from app.services.pr_analysis import analyze_pull_request
 
 
 app = FastAPI(
@@ -59,21 +61,47 @@ async def github_webhook(request: Request):
             "event": "ping",
         }
 
-    if event == "pull_request":
-        pr = data.get("pull_request", {})
-
+    if event != "pull_request":
         return {
-            "status": "accepted",
-            "event": "pull_request",
-            "action": data.get("action"),
-            "pull_request": {
-                "number": pr.get("number"),
-                "title": pr.get("title"),
-                "state": pr.get("state"),
-            },
+            "status": "ignored",
+            "event": event,
         }
 
+    action = data.get("action")
+
+    if action not in {
+        "opened",
+        "synchronize",
+        "reopened",
+        "ready_for_review",
+    }:
+        return {
+            "status": "ignored",
+            "event": event,
+            "action": action,
+        }
+
+    repository = data["repository"]["full_name"]
+    pull_number = data["pull_request"]["number"]
+    installation_id = data["installation"]["id"]
+    head_sha = data["pull_request"]["head"]["sha"]
+
+    findings = await analyze_pull_request(
+        repository=repository,
+        pull_number=pull_number,
+        installation_id=installation_id,
+    )
+
+    await create_canary_check(
+        repository=repository,
+        head_sha=head_sha,
+        installation_id=installation_id,
+        findings=findings,
+    )
+
     return {
-        "status": "ignored",
-        "event": event,
+        "status": "analyzed",
+        "repository": repository,
+        "pull_request": pull_number,
+        "findings": len(findings),
     }
