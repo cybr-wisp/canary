@@ -11,7 +11,7 @@ from app.services.pr_analysis import analyze_pull_request
 app = FastAPI(
     title="Canary",
     description="Behavioral regression detection for GitHub pull requests",
-    version="0.1.0",
+    version="1.0.0",
 )
 
 
@@ -20,7 +20,7 @@ async def health_check():
     return {
         "status": "ok",
         "service": "canary",
-        "version": "0.1.0",
+        "version": "1.0.0",
     }
 
 
