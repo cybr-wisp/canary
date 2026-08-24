@@ -29,7 +29,10 @@ async def github_webhook(request: Request):
     payload = await request.body()
 
     signature = request.headers.get("X-Hub-Signature-256")
-    event = request.headers.get("X-GitHub-Event", "unknown")
+    event = request.headers.get(
+        "X-GitHub-Event",
+        "unknown",
+    )
 
     if not settings.github_webhook_secret:
         raise HTTPException(
@@ -49,11 +52,12 @@ async def github_webhook(request: Request):
 
     try:
         data = json.loads(payload)
-    except json.JSONDecodeError:
+
+    except json.JSONDecodeError as exc:
         raise HTTPException(
             status_code=400,
             detail="Invalid JSON payload",
-        )
+        ) from exc
 
     if event == "ping":
         return {
@@ -86,7 +90,7 @@ async def github_webhook(request: Request):
     installation_id = data["installation"]["id"]
     head_sha = data["pull_request"]["head"]["sha"]
 
-    findings = await analyze_pull_request(
+    result = await analyze_pull_request(
         repository=repository,
         pull_number=pull_number,
         installation_id=installation_id,
@@ -96,12 +100,23 @@ async def github_webhook(request: Request):
         repository=repository,
         head_sha=head_sha,
         installation_id=installation_id,
-        findings=findings,
+        result=result,
     )
 
     return {
         "status": "analyzed",
         "repository": repository,
         "pull_request": pull_number,
-        "findings": len(findings),
+        "findings": result.finding_count,
+        "risk": {
+            "high": result.high_risk_count,
+            "medium": result.medium_risk_count,
+            "low": result.low_risk_count,
+        },
+        "analysis": {
+            "files": result.files_analyzed,
+            "python_files": result.python_files_analyzed,
+            "functions": result.functions_inspected,
+            "changed_lines": result.changed_lines,
+        },
     }
