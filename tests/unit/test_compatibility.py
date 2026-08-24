@@ -87,6 +87,18 @@ def create_user(
         in categories(findings)
     )
 
+    finding = next(
+        finding
+        for finding in findings
+        if finding.category
+        == "REQUIRED_PARAMETER_ADDED"
+    )
+
+    assert finding.evidence == (
+        "create_user(name) → "
+        "create_user(name, organization_id)"
+    )
+
 
 def test_optional_parameter_added_is_safe():
     findings = compare(

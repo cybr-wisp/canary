@@ -25,6 +25,7 @@ def pluralize(
     plural: str | None = None,
 ) -> str:
     """Return the correct singular or plural word."""
+
     if count == 1:
         return singular
 
@@ -37,6 +38,7 @@ def get_overall_risk(
     """
     Return the icon and label for the overall PR risk level.
     """
+
     if result.high_risk_count:
         return "🔴", "HIGH RISK"
 
@@ -61,6 +63,7 @@ def build_risk_bar(
 
         █████░░░░░
     """
+
     if total <= 0:
         return "░" * width
 
@@ -92,6 +95,7 @@ def _semantic_impact_counts(
             unknown_calls,
         )
     """
+
     affected_calls = 0
     breaking_calls = 0
     unknown_calls = 0
@@ -129,6 +133,7 @@ def build_check_title(
     """
     Build the short title GitHub displays beside the Canary check.
     """
+
     if result.finding_count == 0:
         return (
             "✅ All clear — "
@@ -158,6 +163,7 @@ def build_check_summary(
     """
     Build Canary's top-level GitHub Check summary.
     """
+
     risk_icon, risk_label = (
         get_overall_risk(result)
     )
@@ -297,6 +303,7 @@ def _format_evidence(
         def authenticate(token) →
         def authenticate(token, strict=False)
     """
+
     if " → " not in evidence:
         return (
             "```text\n"
@@ -326,6 +333,7 @@ def build_finding_section(
     """
     Render one Canary finding as GitHub Markdown.
     """
+
     icon = SEVERITY_ICONS[
         finding.severity
     ]
@@ -353,7 +361,7 @@ def build_finding_section(
             "<details>\n"
             f"<summary><strong>"
             f"View technical evidence "
-            f"#{index}"
+            f"{index}"
             f"</strong></summary>\n\n"
             f"{_format_evidence(finding.evidence)}\n"
             "</details>"
@@ -369,6 +377,7 @@ def _find_validated_impact(
     """
     Find the validated repository impact associated with a finding.
     """
+
     for validated in result.validated_impacts:
         impact_finding = (
             validated.impact.finding
@@ -389,6 +398,7 @@ def build_semantic_impact_section(
     """
     Render repository-wide call-site impact for one semantic finding.
     """
+
     assessments = (
         validated.assessments
     )
@@ -500,6 +510,7 @@ def build_check_text(
     """
     Build the detailed findings section of the GitHub Check.
     """
+
     if not result.findings:
         return (
             "### What Canary inspected\n\n"
@@ -563,6 +574,7 @@ def build_annotations(
     GitHub displays these directly beside affected lines in
     the pull-request diff.
     """
+
     annotations: list[dict] = []
 
     for finding in result.findings:
@@ -609,6 +621,7 @@ def build_check_output(
     Keeping this here means checks.py only needs to worry about
     authentication and sending the HTTP request.
     """
+
     return {
         "title": build_check_title(
             result

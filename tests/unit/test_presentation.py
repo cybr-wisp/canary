@@ -141,6 +141,8 @@ def test_check_text_formats_old_and_new_evidence_as_diff():
     assert "- def authenticate(token)" in text
     assert "+ def authenticate(token, strict=False)" in text
     assert "PUBLIC_API_CHANGE" in text
+    assert "View technical evidence 1" in text
+    assert "View technical evidence #1" not in text
 
 
 def test_high_risk_finding_becomes_failure_annotation():

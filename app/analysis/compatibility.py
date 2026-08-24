@@ -63,6 +63,28 @@ def _parameter_order(
     ]
 
 
+def _function_signature(
+    function: FunctionInfo,
+) -> str:
+    """
+    Render a compact external function signature for evidence.
+
+    Implicit method receivers such as self and cls are omitted.
+    """
+
+    parameters = [
+        parameter.name
+        for parameter in function.parameters
+        if parameter.name
+        not in IGNORED_IMPLICIT_PARAMETERS
+    ]
+
+    return (
+        f"{function.qualname}"
+        f"({', '.join(parameters)})"
+    )
+
+
 def _required_parameter(
     parameter: ParameterInfo,
 ) -> bool:
@@ -139,8 +161,8 @@ def _detect_required_parameters_added(
                     f"to `{after.qualname}`."
                 ),
                 evidence=(
-                    f"{before.qualname} → "
-                    f"{after.qualname}"
+                    f"{_function_signature(before)} → "
+                    f"{_function_signature(after)}"
                 ),
                 symbol=after.qualname,
             )
