@@ -1,10 +1,45 @@
 # Canary 🐤
-
+---
 **Repository-aware semantic regression detection for GitHub pull requests.**
 
-Canary analyzes Python API changes, traces their impact across a repository, and identifies call sites that are likely to break before the pull request is merged.
+[![CI](https://github.com/cybr-wisp/canary/actions/workflows/ci.yml/badge.svg)](https://github.com/cybr-wisp/canary/actions/workflows/ci.yml)
+[![Release Build](https://github.com/cybr-wisp/canary/actions/workflows/release.yml/badge.svg)](https://github.com/cybr-wisp/canary/actions/workflows/release.yml)
+[![GitHub release](https://img.shields.io/github/v/release/cybr-wisp/canary)](https://github.com/cybr-wisp/canary/releases)
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+[![License](https://img.shields.io/github/license/cybr-wisp/canary)](LICENSE)
 
-It runs as a GitHub App or from the command line and produces deterministic, explainable findings directly inside the developer workflow.
+
+Canary analyzes Python API changes, traces their impact across a repository, and identifies call sites that are likely to break before the pull request is merged. It runs as a GitHub App or from the command line and produces deterministic, explainable findings directly inside the developer workflow.
+
+## Tech stack
+
+Canary is built as a Python static-analysis and GitHub integration service.
+
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-Webhook_Service-009688?logo=fastapi&logoColor=white)
+![GitHub](https://img.shields.io/badge/GitHub-Apps_%26_Checks-181717?logo=github&logoColor=white)
+![Pytest](https://img.shields.io/badge/Pytest-Test_Suite-0A9EDC?logo=pytest&logoColor=white)
+![Typer](https://img.shields.io/badge/Typer-CLI-009485)
+![Rich](https://img.shields.io/badge/Rich-Terminal_UI-000000)
+![Pydantic](https://img.shields.io/badge/Pydantic-Configuration-E92063?logo=pydantic&logoColor=white)
+![HTTPX](https://img.shields.io/badge/HTTPX-GitHub_API-2C5BB4)
+
+| Layer | Technology |
+| --- | --- |
+| Language | Python 3.11+ |
+| Semantic analysis | Python `ast` |
+| API / webhook service | FastAPI |
+| GitHub integration | GitHub Apps, Checks API, REST API |
+| CLI | Typer |
+| Terminal presentation | Rich |
+| Configuration | Pydantic Settings |
+| HTTP client | HTTPX |
+| Testing | Pytest, pytest-asyncio |
+| CI/CD | GitHub Actions |
+| Packaging | setuptools / `pyproject.toml` |
+
+
+
 
 ```text
 API change
