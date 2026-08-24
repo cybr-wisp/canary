@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.main import app
+from app.models import AnalysisResult
 
 
 client = TestClient(app)
@@ -47,12 +48,28 @@ def test_pull_request_webhook():
 
     payload = json.dumps(body).encode("utf-8")
 
+    analysis_result = AnalysisResult(
+        findings=[],
+        files_analyzed=2,
+        python_files_analyzed=1,
+        functions_inspected=3,
+        changed_lines=8,
+        additions=5,
+        deletions=3,
+    )
+
+    analyze_mock = AsyncMock(
+        return_value=analysis_result
+    )
+
+    check_mock = AsyncMock()
+
     with patch(
         "app.main.analyze_pull_request",
-        new=AsyncMock(return_value=[]),
+        new=analyze_mock,
     ), patch(
         "app.main.create_canary_check",
-        new=AsyncMock(),
+        new=check_mock,
     ):
         response = client.post(
             "/webhook",
@@ -72,6 +89,32 @@ def test_pull_request_webhook():
     assert data["repository"] == "cybr-wisp/canary-testbed"
     assert data["pull_request"] == 42
     assert data["findings"] == 0
+
+    assert data["risk"] == {
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+    }
+
+    assert data["analysis"] == {
+        "files": 2,
+        "python_files": 1,
+        "functions": 3,
+        "changed_lines": 8,
+    }
+
+    analyze_mock.assert_awaited_once_with(
+        repository="cybr-wisp/canary-testbed",
+        pull_number=42,
+        installation_id=12345,
+    )
+
+    check_mock.assert_awaited_once_with(
+        repository="cybr-wisp/canary-testbed",
+        head_sha="abc123",
+        installation_id=12345,
+        result=analysis_result,
+    )
 
 
 def test_webhook_rejects_invalid_signature():
