@@ -7,7 +7,16 @@ from app.github.presentation import (
     build_risk_bar,
     get_overall_risk,
 )
-from app.models import AnalysisResult, RiskFinding, Severity
+from app.models import (
+    AnalysisResult,
+    CallImpactStatus,
+    CallSite,
+    CallSiteAssessment,
+    CompatibilityImpact,
+    RiskFinding,
+    Severity,
+    ValidatedCompatibilityImpact,
+)
 
 
 def make_finding(
@@ -132,6 +141,8 @@ def test_check_text_formats_old_and_new_evidence_as_diff():
     assert "- def authenticate(token)" in text
     assert "+ def authenticate(token, strict=False)" in text
     assert "PUBLIC_API_CHANGE" in text
+    assert "View technical evidence 1" in text
+    assert "View technical evidence #1" not in text
 
 
 def test_high_risk_finding_becomes_failure_annotation():
@@ -238,10 +249,8 @@ def test_singular_finding_uses_singular_grammar():
 
     assert "1 potential regression risk detected" in title
     assert "risk(s)" not in title
-
     assert "1 regression signal detected" in summary
     assert "across **1 file**" in summary
-
     assert "signal(s)" not in summary
     assert "file(s)" not in summary
 
@@ -262,7 +271,63 @@ def test_multiple_findings_use_plural_grammar():
     assert "3 potential regression risks detected" in title
     assert "3 regression signals detected" in summary
     assert "across **4 files**" in summary
-
     assert "risk(s)" not in title
     assert "signal(s)" not in summary
     assert "file(s)" not in summary
+
+
+def test_v2_check_renders_repository_impact_and_breaking_calls():
+    finding = RiskFinding(
+        category="REQUIRED_PARAMETER_ADDED",
+        severity=Severity.HIGH,
+        filename="app/users.py",
+        message="Required parameter added: organization_id",
+        line=1,
+        symbol="create_user",
+    )
+
+    call_site = CallSite(
+        filename="app/api.py",
+        line=14,
+        column=4,
+        callee="create_user",
+        resolved_callee="app.users.create_user",
+        positional_argument_count=1,
+    )
+
+    impact = CompatibilityImpact(
+        finding=finding,
+        impact_severity=Severity.HIGH,
+        call_sites=(call_site,),
+    )
+
+    assessment = CallSiteAssessment(
+        call_site=call_site,
+        status=CallImpactStatus.BREAKS,
+        reason="missing required parameter 'organization_id'",
+    )
+
+    validated = ValidatedCompatibilityImpact(
+        impact=impact,
+        assessments=(assessment,),
+    )
+
+    result = AnalysisResult(
+        findings=[finding],
+        validated_impacts=[validated],
+        files_analyzed=2,
+        python_files_analyzed=2,
+        functions_inspected=2,
+    )
+
+    summary = build_check_summary(result)
+    text = build_check_text(result)
+
+    assert "Repository impact" in summary
+    assert "| Call sites analyzed | **1** |" in summary
+    assert "| Confirmed breaking | **1** |" in summary
+
+    assert "Repository impact" in text
+    assert "Confirmed breakages" in text
+    assert "`app/api.py:14`" in text
+    assert "missing required parameter 'organization_id'" in text
