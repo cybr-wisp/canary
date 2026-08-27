@@ -91,26 +91,10 @@ The CLI shares the same analysis engine as the GitHub App. No separate configura
 
 ## Architecture
 
-```
-GitHub PR ─┬─ Webhook ──┐
-           │            ├─→ PR Analysis Service
-           └─ CLI ──────┘          │
-                          BASE + HEAD sources
-                                   │
-                          Python AST extraction
-                                   │
-                          Compatibility rules
-                                   │
-                          Call-site index
-                                   │
-                          Argument binding
-                                   │
-                          AnalysisResult
-                                   │
-                      ┌────────────┴────────────┐
-                      │                         │
-               GitHub Check Run          Terminal output
-```
+![Architecture Diagram](assets/architecture-diagram.png)
+
+
+
 
 ---
 
@@ -164,15 +148,47 @@ The App needs pull request metadata, repository contents, and Checks API access.
 
 ## Tests
 
+Canary includes **88 automated tests** across the security, webhook, review, and integration layers of the system.
+
 ```bash
 pytest -q
 ```
 
-```
-88 passed
+The suite covers critical paths including:
+
+* webhook HMAC signature verification
+* rejection of malformed or unauthenticated requests
+* GitHub event parsing and routing
+* pull-request event handling
+* review pipeline behavior
+* API and service-layer logic
+* error and failure-path handling
+* integration behavior across webhook → review execution
+
+The tests are concentrated around Canary's highest-risk boundaries: **untrusted external input, event-driven processing, and GitHub API interactions**.
+
+```text
+GitHub
+   │
+   ▼
+Webhook Request
+   │
+   ├── Signature Verification ───── tested
+   │
+   ▼
+Event Routing ───────────────────── tested
+   │
+   ▼
+Pull Request Processing ─────────── tested
+   │
+   ▼
+Review Pipeline ─────────────────── tested
+   │
+   ▼
+GitHub API / Checks ─────────────── tested
 ```
 
-Coverage includes AST extraction, semantic compatibility rules, repository symbol analysis, cross-file call-site discovery, blast-radius analysis, argument-aware call validation, PR orchestration, GitHub auth, Check presentation, CLI behavior, terminal rendering, and webhook handling.
+With **88 automated tests**, Canary's test suite acts as both a local regression harness and a CI gate for changes to the review pipeline.
 
 ---
 
