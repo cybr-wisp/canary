@@ -1,20 +1,21 @@
-
 <h1 align="center">c a n a r y</h1>
 
 **Canary is a deterministic, repository-aware static analysis engine for Python pull requests.**
 
-★ It compares API contracts across BASE → HEAD, traces changed interfaces through repository call sites, statically re-binds existing calls against the new signatures, and surfaces confirmed incompatibilities before merge.
-
-![Canary](assets/canary-header.png)
+It compares API contracts across BASE and HEAD, traces changed interfaces into repository call sites, statically re-binds existing calls against new signatures, and surfaces confirmed incompatibilities before merge.
 
 <p align="center">
-  <strong>99.6 ms</strong> median analysis
-  &nbsp; • &nbsp;
-  <strong>76.7K LOC/s</strong> throughput
-  &nbsp; • &nbsp;
+  <img src="assets/canary-header.png" alt="Canary" width="75%">
+</p>
+
+<p align="center">
+  <strong>64.45 ms</strong> median analysis
+  &nbsp; · &nbsp;
+  <strong>118.5K LOC/s</strong> throughput
+  &nbsp; · &nbsp;
+  <strong>100/100</strong> seeded cases
+  &nbsp; · &nbsp;
   <strong>50/50</strong> deterministic runs
-  &nbsp; • &nbsp;
-  <strong>7/7</strong> semantic regression classes
 </p>
 
 <p align="center">
@@ -30,233 +31,191 @@
   </a>
 </p>
 
-
-
-
-## The Problem
-
-A pull request can pass CI, type checking, linting, and every unit test while still introducing an interface change that silently breaks downstream code. Standard tooling checks whether code is syntactically valid, not whether existing callers still satisfy the new contract.
-
-## This Project
-
-Canary is a deterministic GitHub App and CLI that detects Python API changes, traces them to every repository caller, and confirms whether existing call sites are still compatible, all before the PR merges. No LLM in the analysis loop. Same repo state, same PR, same findings, every time.
-
 ---
 
-## The Gap
+## The problem
 
-Every other check passes. The regression still ships.
+A pull request can pass CI, type checking, linting, and its existing test suite while still introducing an interface change that breaks an unexercised downstream caller.
 
-![The Gap](assets/the-gap.png)
-
----
-
-## Analysis Pipeline
-
-Six deterministic stages from pull request to confirmed breakage.
-
-![Analysis Pipeline](assets/analysis-pipeline.png)
-
----
-
-## What Ships
-
-Same analysis engine, two delivery surfaces.
-
-![What Ships](assets/what-ships.png)
-
----
-
-## What Canary Detects
-
-Canary analyzes Python function and method interfaces across seven semantic compatibility rules.
-
-| Finding | Example |
-|---|---|
-| `REQUIRED_PARAMETER_ADDED` | `def f(a)` → `def f(a, b)` |
-| `PARAMETER_REMOVED` | `def f(a, b)` → `def f(a)` |
-| `PARAMETER_REORDERED` | `def f(a, b)` → `def f(b, a)` |
-| `PARAMETER_DEFAULT_REMOVED` | `def f(a=1)` → `def f(a)` |
-| `RETURN_TYPE_CHANGED` | `def f() -> str` → `def f() -> int` |
-| `ASYNC_BEHAVIOR_CHANGED` | `def f()` → `async def f()` |
-| `PUBLIC_API_REMOVED` | `def f()` → *(deleted)* |
-
-For each finding, Canary searches the repository for callers and classifies every call site:
-
-| Status | Meaning |
-|---|---|
-| `BREAKS` | Static binding confirms incompatibility |
-| `UNAFFECTED` | Call remains compatible with the new signature |
-| `UNKNOWN` | Static analysis cannot safely determine |
-
----
-
-## Argument-Aware Validation
-
-Canary performs full static argument binding against changed signatures, accounting for positional arguments, keyword arguments, required and optional parameters, positional-only and keyword-only parameters, `*args`, `**kwargs`, duplicate bindings, excess positional arguments, unexpected keywords, and awaited vs non-awaited calls.
-
----
-
-## GitHub Check
-
-Canary runs automatically on PRs that are opened, updated, reopened, or marked ready for review. High-risk findings fail the check.
-
-The check reports overall risk level, compatibility findings, files and functions analyzed, repository call sites, confirmed breakages, compatible calls, and calls requiring manual review. Inline annotations mark affected source lines.
-
----
-
-## CLI
-
-```bash
-canary inspect https://github.com/owner/repo/pull/123
+```diff
+-def authenticate(token):
++def authenticate(token, strict):
+     ...
 ```
 
-The CLI shares the same analysis engine as the GitHub App. No separate configuration.
+The modified function is valid. The project may still build. Its tests may still pass. But elsewhere in the repository:
+
+```python
+from auth import authenticate
+
+def login():
+    return authenticate("demo-token")
+```
+
+That caller no longer satisfies the API contract.
+
+The important question is not only *what changed in this pull request*, but:
+
+> **Which existing callers depend on that contract, and which of them are now incompatible?**
+
+<p align="center">
+  <img src="assets/the-gap.png" alt="The gap between passing CI and breaking callers" width="75%">
+</p>
+
+---
+
+## How it works
+
+Canary compares the BASE and HEAD versions of changed Python APIs, builds a static repository call index, resolves affected callers, and validates those calls against the new callable contract.
+
+<p align="center">
+  <img src="assets/analysis-pipeline.png" alt="Canary analysis pipeline" width="75%">
+</p>
+
+There is **no LLM in the analysis loop**. For identical repository state and pull-request input, Canary produces deterministic findings. When available static evidence is insufficient to justify a compatibility decision, Canary returns `UNKNOWN` instead of guessing.
+
+### Semantic compatibility rules
+
+| Finding | What changed | Potential impact |
+|---|---|---|
+| `REQUIRED_PARAMETER_ADDED` | New required argument | Existing caller provides too few arguments |
+| `PARAMETER_REMOVED` | Existing parameter deleted | Caller still supplies the removed argument |
+| `PARAMETER_REORDERED` | Positional order changes | Existing arguments bind to different parameters |
+| `PARAMETER_DEFAULT_REMOVED` | Optional becomes required | Caller relied on the previous default |
+| `RETURN_TYPE_CHANGED` | Return annotation changes | Downstream usage may no longer be compatible |
+| `ASYNC_BEHAVIOR_CHANGED` | Sync/async contract changes | Missing or invalid `await` |
+| `PUBLIC_API_REMOVED` | Public callable disappears | Existing caller references a missing API |
+
+Each changed interface is then traced into repository usage. Canary statically validates positional-only, keyword-only, `*args`, `**kwargs`, duplicate bindings, and awaited versus non-awaited calls:
+
+```text
+valid before + invalid now  →  BREAKS
+still valid                 →  UNAFFECTED
+cannot prove safely         →  UNKNOWN
+```
+
+Resolution covers direct imports, aliased imports, module-qualified calls, relative imports, same-file calls, and class-qualified calls.
+
+---
+
+## Benchmarks
+
+Canary is evaluated across its own repository (42 Python files, 7,641 LOC, 211 functions, 861 call sites), a 100-case seeded semantic mutation suite, and generated repositories up to 1,000 files.
+
+| | |
+|---|---:|
+| Median analysis latency | **64.45 ms** |
+| Source throughput | **118,549 LOC/s** |
+| Deterministic executions | **50/50 identical** |
+| Precision / Recall / F1 | **100% / 100% / 1.0** |
+| Ambiguous cases correctly abstained | **10/10** |
+| Semantic categories covered | **7/7** |
+| 1,000-file repository | **210.36 ms** |
+
+Full methodology, raw results, and reproduction instructions are documented in [`benchmark.md`](benchmark.md).
+
+```bash
+python benchmarks/run_all.py
+```
+
+<sub>Benchmark results describe controlled evaluation conditions and should not be interpreted as universal production accuracy.</sub>
+
+---
+
+## What ships: GitHub Check and CLI
+
+Canary runs as a GitHub App and surfaces analysis directly during pull-request review. High-risk findings fail the check before merge.
+
+<p align="center">
+  <img src="assets/what-ships.png" alt="Canary output" width="75%">
+</p>
+
+GitHub Check output includes risk level, semantic finding category, old/new interface evidence, affected repository callers, confirmed incompatibilities, compatible callers, unresolved callers requiring review, exact source locations, and inline annotations.
+
+The same analysis engine is available from the terminal:
+
+```bash
+canary inspect https://github.com/owner/repository/pull/123
+```
 
 ---
 
 ## Architecture
 
-![Architecture Diagram](assets/architecture-diagram.png)
+The webhook and CLI entry points converge on a shared analysis service. Source resolution, AST extraction, compatibility analysis, repository indexing, impact analysis, and argument validation run through the same deterministic engine.
 
-
-
+<p align="center">
+  <img src="assets/architecture-diagram.png" alt="Canary system architecture" width="75%">
+</p>
 
 ---
 
-## Quick Start
+## Quick start
 
 ```bash
 git clone https://github.com/cybr-wisp/canary.git
 cd canary
 python -m venv .venv
-```
-
-```powershell
-# Windows
-.\.venv\Scripts\Activate.ps1
-```
-
-```bash
-# macOS / Linux
-source .venv/bin/activate
-```
-
-```bash
+source .venv/bin/activate    # Windows: .\.venv\Scripts\Activate.ps1
 pip install -e .
 canary --help
 ```
 
-### Run the webhook service
+Inspect a pull request:
 
 ```bash
-uvicorn app.main:app --reload
+canary inspect https://github.com/owner/repository/pull/123
 ```
 
-```
-GET  /health
-POST /webhook
-```
-
-### GitHub App setup
-
-Create `.env` from `.env.example`:
-
-```env
-GITHUB_APP_ID=
-GITHUB_PRIVATE_KEY_PATH=
-GITHUB_WEBHOOK_SECRET=
-```
-
-The App needs pull request metadata, repository contents, and Checks API access. It receives `pull_request` webhook events.
-
----
-
-## Tests
-
-Canary includes **88 automated tests** across the security, webhook, review, and integration layers of the system.
+Run the tests and benchmarks:
 
 ```bash
 pytest -q
-```
-
-The suite covers critical paths including:
-
-* webhook HMAC signature verification
-* rejection of malformed or unauthenticated requests
-* GitHub event parsing and routing
-* pull-request event handling
-* review pipeline behavior
-* API and service-layer logic
-* error and failure-path handling
-* integration behavior across webhook → review execution
-
-The tests are concentrated around Canary's highest-risk boundaries: **untrusted external input, event-driven processing, and GitHub API interactions**.
-
-```text
-GitHub
-   │
-   ▼
-Webhook Request
-   │
-   ├── Signature Verification ───── tested
-   │
-   ▼
-Event Routing ───────────────────── tested
-   │
-   ▼
-Pull Request Processing ─────────── tested
-   │
-   ▼
-Review Pipeline ─────────────────── tested
-   │
-   ▼
-GitHub API / Checks ─────────────── tested
-```
-
-With **88 automated tests**, Canary's test suite acts as both a local regression harness and a CI gate for changes to the review pipeline.
-
----
-
-## Project Structure
-
-```
-canary/
-├── app/
-│   ├── analysis/           semantic analysis engine
-│   │   ├── ast_analyzer.py        AST extraction
-│   │   ├── compatibility.py       interface comparison
-│   │   ├── call_validation.py     argument binding
-│   │   ├── impact.py              blast-radius analysis
-│   │   ├── repository_analyzer.py symbol + call-site index
-│   │   ├── risk_rules.py          severity classification
-│   │   ├── diff_parser.py         fallback diff analysis
-│   │   └── analyzer.py            orchestration
-│   ├── github/              GitHub App integration
-│   ├── services/            PR analysis service
-│   ├── terminal/            CLI presentation
-│   ├── cli.py               Typer CLI
-│   ├── main.py              FastAPI entrypoint
-│   └── models.py            domain models
-├── tests/
-│   ├── unit/                13 test modules
-│   └── integration/         webhook tests
-├── .github/workflows/       CI + release
-└── pyproject.toml
+python benchmarks/run_all.py
 ```
 
 ---
 
-## Tech Stack
+## Design principles
+
+**Deterministic.** No probabilistic model or LLM participates in semantic classification.
+
+**Repository-aware.** A changed signature is only the beginning. Canary follows that interface into callers that depend on it.
+
+**Conservative.** When compatibility cannot be justified from static evidence, Canary reports `UNKNOWN`.
+
+**Explainable.** Every finding maps to a concrete compatibility rule, changed symbol, source location, and affected call site.
+
+**Reproducible.** Performance, scaling, determinism, and semantic behavior are backed by executable benchmark suites.
+
+**PR-native.** Results surface directly through GitHub Checks and the CLI.
+
+### Limitations
+
+Canary is a lightweight static analysis system, not a complete Python interpreter or whole-program type engine. Current constraints include:
+
+- Python-only analysis
+- no runtime type inference
+- limited instance-method resolution
+- no dynamic import resolution
+- no monkey-patch or reflection modeling
+- no full interprocedural return-value consumption analysis
+- ambiguous dynamic argument binding may remain `UNKNOWN`
+
+These boundaries are deliberate: unsupported certainty is treated as a limitation, not hidden behind a confident classification.
+
+---
+
+## Tech stack
 
 | Layer | Tools |
 |---|---|
 | Language | Python 3.11+ |
-| Semantic analysis | Python `ast` module |
+| Semantic analysis | Python `ast` |
 | API / webhook | FastAPI |
 | GitHub integration | GitHub Apps, Checks API, REST API |
 | CLI | Typer |
-| Terminal UI | Rich |
+| Terminal presentation | Rich |
 | Configuration | Pydantic Settings |
 | HTTP client | HTTPX |
 | Testing | pytest, pytest-asyncio |
@@ -264,60 +223,86 @@ canary/
 
 ---
 
-## Design Principles
-
-**Deterministic.** No LLM. Findings are derived from repository structure, Python syntax, compatibility rules, and statically observable call behavior.
-
-**Repository-aware.** A signature change alone is not the story. Canary traces how that interface is actually used across the codebase.
-
-**Conservative.** When static analysis cannot reliably prove compatibility or incompatibility, the call site is classified as unknown rather than guessed.
-
-**Explainable.** Every finding has a concrete reason, a source location, and a call site.
-
-**PR-native.** Analysis appears where developers already review code: GitHub Checks, diff annotations, and the terminal.
-
----
-
-## Limitations
-
-Canary is a lightweight static analysis system. Current constraints include Python-only analysis, no runtime type inference, limited instance-method resolution, no dynamic import resolution, no monkey-patch modeling, and no reflection/dispatch tracing. Ambiguous `*args`/`**kwargs` calls may require manual review.
-
-These are deliberate. When Canary cannot justify a conclusion, it surfaces uncertainty rather than manufacturing confidence.
-
----
-
 ## Roadmap
 
-### Shipped (v2.0)
-- [x] Python AST analysis
-- [x] 7 semantic compatibility rules
-- [x] Repository-wide symbol + call-site indexing
-- [x] Argument-aware call validation
-- [x] GitHub Check with inline annotations
-- [x] CLI with terminal presentation
-- [x] CI/CD pipeline
-- [x] 88-test suite
+### Shipped
 
-### Future
-- [ ] Additional language support
+- [x] Python AST analysis
+- [x] 7 semantic compatibility classes
+- [x] Repository-wide symbol and call-site indexing
+- [x] Import and alias resolution
+- [x] Argument-aware static binding
+- [x] `BREAKS / UNAFFECTED / UNKNOWN` classification
+- [x] GitHub Checks with inline annotations
+- [x] CLI
+- [x] 88-test regression suite
+- [x] 100-case seeded semantic mutation benchmark
+- [x] Repository scaling benchmark
+
+### Next
+
 - [ ] Deeper Python type inference
 - [ ] Instance-method resolution
 - [ ] Interprocedural data-flow analysis
+- [ ] Historical real-world regression corpus
+- [ ] External open-source repository evaluation
 - [ ] Configurable repository policies
-- [ ] Package-level compatibility analysis
+- [ ] Additional language support
 
 ---
 
-## v1 → v2
+## Project structure
 
-v1 established the deterministic PR analysis pipeline: diff parsing, signature-level risk rules, GitHub Check.
-
-v2 extends into repository-aware semantic analysis: AST extraction, compatibility rules, call-site discovery, argument binding, and confirmed breakages with source locations.
-
-The key shift: Canary no longer stops at "this API changed." It continues to "these callers use it, and these calls no longer bind."
+```
+canary/
+├── app/
+│   ├── analysis/
+│   │   ├── analyzer.py
+│   │   ├── ast_analyzer.py
+│   │   ├── call_validation.py
+│   │   ├── compatibility.py
+│   │   ├── diff_parser.py
+│   │   ├── impact.py
+│   │   ├── repository_analyzer.py
+│   │   └── risk_rules.py
+│   ├── github/
+│   │   ├── auth.py
+│   │   ├── checks.py
+│   │   ├── client.py
+│   │   └── presentation.py
+│   ├── services/
+│   │   └── pr_analysis.py
+│   ├── terminal/
+│   │   └── presentation.py
+│   ├── cli.py
+│   ├── config.py
+│   ├── main.py
+│   └── models.py
+├── tests/
+│   ├── integration/
+│   └── unit/
+├── benchmarks/
+│   ├── canary_repository_benchmark.py
+│   ├── scaling_benchmark.py
+│   ├── semantic_rules_benchmark.py
+│   ├── semantic_mutation_benchmark.py
+│   ├── run_all.py
+│   └── latest_results.txt
+├── .github/workflows/
+├── benchmark.md
+├── pyproject.toml
+├── requirements.txt
+└── README.md
+```
 
 ---
 
 ## License
 
-See [`LICENSE`](LICENSE).
+MIT
+
+---
+
+<p align="center">
+  made by marie with ☕
+</p>
