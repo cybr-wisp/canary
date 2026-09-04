@@ -102,9 +102,10 @@ Resolution covers direct imports, aliased imports, module-qualified calls, relat
 
 Canary is evaluated across its own repository (42 Python files, 7,641 LOC, 211 functions, 861 call sites), a 100-case seeded semantic mutation suite, and generated repositories up to 1,000 files.
 
-| | |
+| Metric | Result |
 |---|---:|
 | Median analysis latency | **64.45 ms** |
+| P95 analysis latency | **102.66 ms** |
 | Source throughput | **118,549 LOC/s** |
 | Deterministic executions | **50/50 identical** |
 | Precision / Recall / F1 | **100% / 100% / 1.0** |
@@ -253,7 +254,7 @@ These boundaries are deliberate: unsupported certainty is treated as a limitatio
 
 ## Project structure
 
-```
+```text
 canary/
 ├── app/
 │   ├── analysis/
