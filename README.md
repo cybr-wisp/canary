@@ -1,4 +1,20 @@
 # Canary
+🐤 CANARY
+
+Repository-aware semantic regression detection
+for Python pull requests.
+
+Catch the breakage your tests didn't.
+
+[badges]
+
+99.6 ms       76.7K LOC/s       50/50           368 ms
+median        throughput         deterministic    1K-file benchmark
+analysis                         runs
+
+![Header](assets/canary-header.png)
+
+
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Webhook-009688?style=flat-square&logo=fastapi&logoColor=white)
