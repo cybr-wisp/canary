@@ -1,7 +1,8 @@
 
-<h1 align="center">Canary</h1>
+<h1 align="center">c a n a r y</h1>
 
 **Canary is a deterministic, repository-aware static analysis engine for Python pull requests.**
+
 ★ It compares API contracts across BASE → HEAD, traces changed interfaces through repository call sites, statically re-binds existing calls against the new signatures, and surfaces confirmed incompatibilities before merge.
 
 ![Canary](assets/canary-header.png)
