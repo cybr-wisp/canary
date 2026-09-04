@@ -1,27 +1,38 @@
+
 # Canary
-🐤 CANARY
 
-Repository-aware semantic regression detection
-for Python pull requests.
+### Trace breaking API changes to the callers they actually affect.
 
-Catch the breakage your tests didn't.
+**Canary is a deterministic, repository-aware static analysis engine for Python pull requests.**  
+It compares API contracts across BASE → HEAD, traces changed interfaces through repository call sites, statically re-binds existing calls against the new signatures, and surfaces confirmed incompatibilities before merge.
 
-[badges]
+![Canary](assets/canary-header.png)
 
-99.6 ms       76.7K LOC/s       50/50           368 ms
-median        throughput         deterministic    1K-file benchmark
-analysis                         runs
+<p align="center">
+  <strong>99.6 ms</strong> median analysis
+  &nbsp; • &nbsp;
+  <strong>76.7K LOC/s</strong> throughput
+  &nbsp; • &nbsp;
+  <strong>50/50</strong> deterministic runs
+  &nbsp; • &nbsp;
+  <strong>7/7</strong> semantic regression classes
+</p>
 
-![Header](assets/canary-header.png)
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/GitHub-App-181717?style=flat-square&logo=github&logoColor=white" alt="GitHub App">
+  <img src="https://img.shields.io/badge/FastAPI-Webhooks-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/pytest-88%20passed-0A9EDC?style=flat-square&logo=pytest&logoColor=white" alt="pytest">
+  <a href="https://github.com/cybr-wisp/canary/actions/workflows/ci.yml">
+    <img src="https://github.com/cybr-wisp/canary/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
+  <a href="https://github.com/cybr-wisp/canary/releases">
+    <img src="https://img.shields.io/github/v/release/cybr-wisp/canary" alt="Release">
+  </a>
+</p>
 
 
 
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-Webhook-009688?style=flat-square&logo=fastapi&logoColor=white)
-![GitHub Apps](https://img.shields.io/badge/GitHub-Apps_+_Checks-181717?style=flat-square&logo=github&logoColor=white)
-![Tests](https://img.shields.io/badge/pytest-88_passed-0A9EDC?style=flat-square&logo=pytest&logoColor=white)
-[![CI](https://github.com/cybr-wisp/canary/actions/workflows/ci.yml/badge.svg)](https://github.com/cybr-wisp/canary/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/cybr-wisp/canary)](https://github.com/cybr-wisp/canary/releases)
 
 ## The Problem
 
